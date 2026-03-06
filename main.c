@@ -510,7 +510,7 @@ int main() {
   print_matrix(factor.U);
 
   printf("PA:\n");
-  print_matrix(apply_permutation_new(&a, factor.p, A));
+  print_matrix(matrix_apply_permutation_new(&a, factor.p, A));
   printf("LU:\n");
   print_matrix(matrix_matrix_mul_new(&a, factor.L, factor.U));
 

@@ -34,6 +34,12 @@ void *arena_alloc(Arena *a, size_t size) {
   return addr;
 }
 
+size_t arena_save(Arena *a) { return a->offset; }
+
+void arena_restore(Arena *a, size_t saved_offset) {
+  assert(saved_offset <= a->offset);
+  a->offset = saved_offset;
+}
 void arena_destroy(Arena *a) { free(a->base); }
 
 //=============================
@@ -461,9 +467,37 @@ int plu(size_t *p, Matrix *L, Matrix *U, Matrix *A) {
       matrix_set_value(L, row, col, k);
     }
   }
-
   return 0;
 }
+void lu_forward(Matrix *L, Vector *Pb, Vector *y) {
+  // a11 x1                      = b1
+  // a21 x1 + a22 x2             = b2
+  // a31 x1 + a32 x2 + a32 x3    = b3
+  for (size_t i = 0; i < L->cols; i++) {
+    double acum = 0;
+    for (size_t j = 0; j < i; j++) {
+      acum += matrix_get_value(L, i, j) * vector_get_value(y, j);
+    }
+    double b = vector_get_value(Pb, i);
+    // a is 1 by construction
+    vector_set_value(y, i, b - acum);
+  }
+}
+void lu_backward(Matrix *U, Vector *y, Vector *x) {
+  // a11 x1 + a12 x2 + a12 x3    = b1
+  //          a22 x2 + a23 x3    = b2
+  //                   a33 x3    = b3
+  for (size_t i = U->cols; i-- > 0;) {
+    double acum = 0;
+    for (size_t j = i + 1; j < U->cols; j++) {
+      acum += matrix_get_value(U, i, j) * vector_get_value(x, j);
+    }
+    double b = vector_get_value(y, i);
+    double a = matrix_get_value(U, i, i);
+    vector_set_value(x, i, (b - acum) / a);
+  }
+}
+
 typedef struct {
   size_t *p;
   Matrix *L;
@@ -476,6 +510,17 @@ PLUFactorization plu_factor(Arena *a, Matrix *A) {
   factor.U = matrix_of_value(a, A->rows, A->cols, 0);
   plu(factor.p, factor.L, factor.U, A);
   return factor;
+}
+
+Vector *lu_solve(Arena *a, PLUFactorization factor, Vector *b) {
+  size_t scratch = arena_save(a);
+  Vector *x = vector_create(a, b->size);
+  Vector *y = vector_create(a, b->size);
+  Vector *Pb = vector_apply_permutation_new(a, factor.p, b);
+  lu_forward(factor.L, Pb, y);
+  lu_backward(factor.U, y, x);
+  arena_restore(a, scratch);
+  return x;
 }
 
 int main() {
@@ -513,6 +558,10 @@ int main() {
   print_matrix(matrix_apply_permutation_new(&a, factor.p, A));
   printf("LU:\n");
   print_matrix(matrix_matrix_mul_new(&a, factor.L, factor.U));
+
+  printf("LU solution:\n");
+  Vector *sol = lu_solve(&a, factor, b);
+  print_vector(sol);
 
   arena_destroy(&a);
   return 0;

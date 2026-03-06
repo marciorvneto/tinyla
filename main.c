@@ -136,23 +136,24 @@ Vector *vector_of_value(Arena *a, size_t size, double value) {
   }
   return v;
 }
+
+#define PRINT_WIDTH 6
+#define PRINT_PREC 3
+
 void print_vector(Vector *v) {
   for (size_t i = 0; i < v->size; i++) {
-    printf("%.3f\n", v->values[i]);
+    printf("%*.*f\n", PRINT_WIDTH, PRINT_PREC, v->values[i]);
   }
   printf("\n");
 }
 
 void print_matrix(Matrix *m) {
   for (size_t i = 0; i < m->rows; i++) {
-    printf("[");
+    printf("|");
     for (size_t j = 0; j < m->cols; j++) {
-      printf("%.3f", m->values[i * m->cols + j]);
-      if (j != m->cols - 1) {
-        printf(", ");
-      }
+      printf(" %*.*f", PRINT_WIDTH, PRINT_PREC, m->values[i * m->cols + j]);
     }
-    printf("]\n");
+    printf(" |\n");
   }
   printf("\n");
 }

@@ -219,6 +219,42 @@ Matrix *matrix_append_column(Arena *a, Matrix *m, Vector *column) {
   }
   return new_m;
 }
+void swap_rows(Matrix *m, size_t row1, size_t row2) {
+  for (size_t col = 0; col < m->cols; col++) {
+    double tmp = matrix_get_value(m, row1, col);
+    matrix_set_value(m, row1, col, matrix_get_value(m, row2, col));
+    matrix_set_value(m, row2, col, tmp);
+  }
+}
+
+Matrix *matrix_apply_permutation_new(Arena *a, size_t *p, Matrix *A) {
+  Matrix *new = matrix_create(a, A->rows, A->cols);
+  for (size_t row = 0; row < A->rows; row++) {
+    size_t src_row = p[row];
+    for (size_t col = 0; col < A->cols; col++) {
+      matrix_set_value(new, row, col, matrix_get_value(A, src_row, col));
+    }
+  }
+  return new;
+}
+
+Vector *vector_apply_permutation_new(Arena *a, size_t *p, Vector *b) {
+  Vector *new = vector_create(a, b->size);
+  for (size_t idx = 0; idx < b->size; idx++) {
+    size_t src_idx = p[idx];
+    vector_set_value(new, idx, vector_get_value(b, src_idx));
+  }
+  return new;
+}
+
+void matrix_combine_rows(Matrix *m, size_t row2, double k, size_t row1) {
+  // row2 <- row2 - k * row1
+  for (size_t col = 0; col < m->cols; col++) {
+    double r1 = matrix_get_value(m, row1, col);
+    double r2 = matrix_get_value(m, row2, col);
+    matrix_set_value(m, row2, col, r2 - k * r1);
+  }
+}
 
 // ------
 
@@ -303,24 +339,9 @@ Matrix *matrix_matrix_mul_new(Arena *a, Matrix *m1, Matrix *m2) {
 //
 //=============================
 
-void swap_rows(Matrix *m, size_t row1, size_t row2) {
-  for (size_t col = 0; col < m->cols; col++) {
-    double tmp = matrix_get_value(m, row1, col);
-    matrix_set_value(m, row1, col, matrix_get_value(m, row2, col));
-    matrix_set_value(m, row2, col, tmp);
-  }
-}
+// -------- Gauss -------------
 
-void lu_combine_rows(Matrix *m, size_t row2, double k, size_t row1) {
-  // row2 <- row2 - k * row1
-  for (size_t col = 0; col < m->cols; col++) {
-    double r1 = matrix_get_value(m, row1, col);
-    double r2 = matrix_get_value(m, row2, col);
-    matrix_set_value(m, row2, col, r2 - k * r1);
-  }
-}
-
-int lu_solve(Vector *x, Matrix *aug) {
+int gauss_solve(Vector *x, Matrix *aug) {
 
   // First pass
   for (size_t col = 0; col < aug->cols - 1; col++) {
@@ -345,7 +366,7 @@ int lu_solve(Vector *x, Matrix *aug) {
       // The pivot has been swapped to start_row
       double pivot = matrix_get_value(aug, start_row, col);
       double k = matrix_get_value(aug, row, col) / pivot;
-      lu_combine_rows(aug, row, k, start_row);
+      matrix_combine_rows(aug, row, k, start_row);
     }
   }
 
@@ -371,12 +392,90 @@ int lu_solve(Vector *x, Matrix *aug) {
   }
   return 0;
 }
-Vector *lu_solve_new(Arena *a, Matrix *aug, int *code) {
+Vector *gauss_solve_new(Arena *a, Matrix *aug, int *code) {
   Vector *x = vector_create(a, aug->rows);
   if (!x)
     return NULL;
-  *code = lu_solve(x, aug);
+  *code = gauss_solve(x, aug);
   return x;
+}
+
+// -------- LU -------------
+
+void swap_indices(size_t *indices, size_t i, size_t j) {
+  size_t tmp = indices[i];
+  indices[i] = indices[j];
+  indices[j] = tmp;
+}
+int plu(size_t *p, Matrix *L, Matrix *U, Matrix *A) {
+  for (size_t i = 0; i < A->rows; i++) {
+    p[i] = i;
+    for (size_t j = 0; j < A->cols; j++) {
+      // L
+      if (i == j) {
+        matrix_set_value(L, i, j, 1);
+      } else {
+        matrix_set_value(L, i, j, 0);
+      }
+      // U
+      matrix_set_value(U, i, j, matrix_get_value(A, i, j));
+    }
+  }
+
+  for (size_t col = 0; col < U->cols; col++) {
+    size_t start_row = col;
+
+    // Find pivot
+    double max_pivot_value = matrix_get_value(U, start_row, col);
+    size_t pivot_idx = start_row;
+    for (size_t row = start_row; row < U->rows; row++) {
+      double value = matrix_get_value(U, row, col);
+      if (fabs(value) > fabs(max_pivot_value)) {
+        max_pivot_value = value;
+        pivot_idx = row;
+      }
+    }
+    if (fabs(max_pivot_value) < 1e-16)
+      return -1;
+
+    if (pivot_idx != start_row) {
+      swap_rows(U, pivot_idx, start_row);
+      swap_indices(p, pivot_idx, start_row);
+
+      // Swap everything that came before.
+      // The rightmose structure needs to remain
+      // identity-like
+      for (size_t j = 0; j < col; j++) {
+        double tmp = matrix_get_value(L, pivot_idx, j);
+        matrix_set_value(L, pivot_idx, j, matrix_get_value(L, start_row, j));
+        matrix_set_value(L, start_row, j, tmp);
+      }
+    }
+
+    // Substract rows
+    for (size_t row = start_row + 1; row < U->rows; row++) {
+      // The pivot has been swapped to start_row
+      double pivot = matrix_get_value(U, start_row, col);
+      double k = matrix_get_value(U, row, col) / pivot;
+      matrix_combine_rows(U, row, k, start_row);
+      matrix_set_value(L, row, col, k);
+    }
+  }
+
+  return 0;
+}
+typedef struct {
+  size_t *p;
+  Matrix *L;
+  Matrix *U;
+} PLUFactorization;
+PLUFactorization plu_factor(Arena *a, Matrix *A) {
+  PLUFactorization factor;
+  factor.p = arena_alloc(a, A->rows * sizeof(size_t));
+  factor.L = matrix_of_value(a, A->rows, A->cols, 0);
+  factor.U = matrix_of_value(a, A->rows, A->cols, 0);
+  plu(factor.p, factor.L, factor.U, A);
+  return factor;
 }
 
 int main() {
@@ -387,10 +486,15 @@ int main() {
   vector_set_value(b, 1, -2);
   swap_rows(A, 2, 4);
   matrix_set_value(A, 2, 0, 5);
+  matrix_set_value(A, 0, 3, -2);
+  matrix_set_value(A, 2, 2, 3);
+
+  printf("A:\n");
+  print_matrix(A);
 
   Vector *x = vector_of_value(&a, A->rows, 0);
   Matrix *Ab = matrix_append_column(&a, A, b);
-  lu_solve(x, Ab);
+  gauss_solve(x, Ab);
   print_vector(x);
 
   Vector *check = vector_of_value(&a, A->rows, 0);
@@ -398,6 +502,17 @@ int main() {
   print_vector(check);
   vector_sub(check, check, b);
   print_vector(check);
+
+  PLUFactorization factor = plu_factor(&a, A);
+  printf("L:\n");
+  print_matrix(factor.L);
+  printf("U:\n");
+  print_matrix(factor.U);
+
+  printf("PA:\n");
+  print_matrix(apply_permutation_new(&a, factor.p, A));
+  printf("LU:\n");
+  print_matrix(matrix_matrix_mul_new(&a, factor.L, factor.U));
 
   arena_destroy(&a);
   return 0;

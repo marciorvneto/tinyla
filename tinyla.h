@@ -72,11 +72,15 @@ tla_Matrix *tla_matrix_of_value(tla_Arena *a, size_t rows, size_t cols,
 tla_Matrix *tla_matrix_of_shape(tla_Arena *a, tla_Matrix *base, double value);
 tla_Matrix *tla_matrix_eye(tla_Arena *a, size_t size);
 
-// ------------ tla_Vectors ------------------
+// ------------ Vectors ------------------
 
 tla_Vector *tla_vector_clone(tla_Arena *a, tla_Vector *v);
 tla_Vector *tla_vector_of_value(tla_Arena *a, size_t size, double value);
 tla_Vector *tla_vector_of_shape(tla_Arena *a, tla_Vector *base, double value);
+
+// ------------ Conversions ------------------
+
+tla_Matrix *tla_matrix_from_vector(tla_Arena *a, tla_Vector *base);
 
 #define TLA_PRINT_SCI_WIDTH 11
 #define TLA_PRINT_WIDTH 7
@@ -101,6 +105,8 @@ tla_Vector *tla_vector_apply_permutation_new(tla_Arena *a, size_t *p,
                                              tla_Vector *b);
 void tla_matrix_combine_rows(tla_Matrix *m, size_t row2, double k, size_t row1);
 
+tla_Matrix *tla_matrix_transpose_new(tla_Arena *a, tla_Matrix *m);
+
 // ------
 
 void tla_vector_add(tla_Vector *out, tla_Vector *v1, tla_Vector *v2);
@@ -110,6 +116,19 @@ tla_Vector *tla_vector_add_new(tla_Arena *a, tla_Vector *v1, tla_Vector *v2);
 
 void tla_vector_sub(tla_Vector *out, tla_Vector *v1, tla_Vector *v2);
 tla_Vector *tla_vector_sub_new(tla_Arena *a, tla_Vector *v1, tla_Vector *v2);
+
+// ------
+
+double tla_vector_dot(tla_Vector *v1, tla_Vector *v2);
+
+// ------
+
+void tla_vector_vec(tla_Vector *vout, tla_Vector *v1, tla_Vector *v2);
+tla_Vector *tla_vector_vec_new(tla_Arena *a, tla_Vector *v1, tla_Vector *v2);
+
+// ------
+
+double tla_vector_norm2(tla_Vector *v1);
 
 // ------
 
@@ -302,6 +321,19 @@ tla_Vector *tla_vector_of_shape(tla_Arena *a, tla_Vector *base, double value) {
   return v;
 }
 
+// ------------ Conversions ------------------
+
+// Returns a column matrix containing the vector entries
+// Example: if base is N-dimensional this funciton will return
+// an Nx1 matrix
+tla_Matrix *tla_matrix_from_vector(tla_Arena *a, tla_Vector *base) {
+  tla_Matrix *m = tla_matrix_create(a, base->size, 1);
+  for (size_t i = 0; i < base->size; i++) {
+    tla_matrix_set_value(m, i, 0, tla_vector_get_value(base, i));
+  }
+  return m;
+}
+
 static int should_use_scientific(double value) {
   double abs_value = fabs(value);
   if (abs_value == 0)
@@ -425,6 +457,17 @@ void tla_matrix_combine_rows(tla_Matrix *m, size_t row2, double k,
   }
 }
 
+tla_Matrix *tla_matrix_transpose_new(tla_Arena *a, tla_Matrix *m) {
+  tla_Matrix *new_matrix = tla_matrix_create(a, m->cols, m->rows);
+  for (size_t row = 0; row < m->rows; row++) {
+    for (size_t col = 0; col < m->cols; col++) {
+      tla_matrix_set_value(new_matrix, col, row,
+                           tla_matrix_get_value(m, row, col));
+    }
+  }
+  return new_matrix;
+}
+
 // ------
 
 void tla_vector_add(tla_Vector *out, tla_Vector *v1, tla_Vector *v2) {
@@ -458,6 +501,48 @@ tla_Vector *tla_vector_sub_new(tla_Arena *a, tla_Vector *v1, tla_Vector *v2) {
   tla_vector_sub(res, v1, v2);
   return res;
 }
+
+// ------
+
+double tla_vector_dot(tla_Vector *v1, tla_Vector *v2) {
+  assert(v1->size == v2->size);
+  double acum = 0;
+  for (size_t i = 0; i < v1->size; i++) {
+    acum += tla_vector_get_value(v1, i) * tla_vector_get_value(v2, i);
+  }
+  return acum;
+}
+
+// ------
+
+void tla_vector_vec(tla_Vector *vout, tla_Vector *v1, tla_Vector *v2) {
+  assert(v1->size == v2->size);
+  assert(v1->size == vout->size);
+  assert(v1->size == 3);
+  double ux = tla_vector_get_value(v1, 0);
+  double uy = tla_vector_get_value(v1, 1);
+  double uz = tla_vector_get_value(v1, 2);
+
+  double vx = tla_vector_get_value(v2, 0);
+  double vy = tla_vector_get_value(v2, 1);
+  double vz = tla_vector_get_value(v2, 2);
+
+  tla_vector_set_value(vout, 0, uy * vz - vy * uz);
+  tla_vector_set_value(vout, 1, uz * vx - ux * vz);
+  tla_vector_set_value(vout, 2, ux * vy - uy * vx);
+}
+
+tla_Vector *tla_vector_vec_new(tla_Arena *a, tla_Vector *v1, tla_Vector *v2) {
+  assert(v1->size == v2->size);
+  assert(v1->size == 3);
+  tla_Vector *out = tla_vector_of_shape(a, v1, 0);
+  tla_vector_vec(out, v1, v2);
+  return out;
+}
+
+// ------
+
+double tla_vector_norm2(tla_Vector *v1) { return tla_vector_dot(v1, v1); }
 
 // ------
 

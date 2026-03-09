@@ -8,7 +8,8 @@ TinyLA is designed for high-performance numerical computing. Instead of relying 
 
 - **Header-only (STB-style):** Drop `tinyla.h` into your project and you're done. No complex build systems or dependencies.
 - **Arena-backed Memory:** Fast, contiguous memory allocation.
-- **Core Operations:** Matrix/Vector addition, subtraction, multiplication, and row permutations.
+- **Matrix Operations:** Addition, subtraction, multiplication, row permutations, and transposition ($M^T$).
+- **Vector Operations:** Addition, subtraction, dot product, cross product, $L^2$ norm, and vector-to-matrix conversions for inner/outer products.
 - **Solvers:** Gaussian elimination and PLU Factorization ($PA = LU$).
 
 ## Quick Start

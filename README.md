@@ -1,8 +1,8 @@
-# TinyLA (`tinyla.h`)
+# TinyLA
 
 A lightweight, single-file, header-only linear algebra library in C.
 
-TinyLA is designed for high-performance numerical computing. Instead of relying on standard `malloc`/`free` for thousands of temporary matrix allocations, it uses a custom **Arena Allocator**. This guarantees zero memory fragmentation, fast bump-pointer allocations, and instantly scrubbable scratch memory—perfect for heavy iterative loops and complex calculations.
+TinyLA is designed for high-performance numerical computing. Instead of relying on standard `malloc`/`free` for thousands of temporary matrix allocations, it uses a custom **Arena Allocator**. This guarantees zero memory fragmentation, fast bump-pointer allocations, and instantly scrubbable scratch memory, which is very convenient for heavy iterative loops and complex calculations.
 
 ## Features
 

@@ -1,49 +1,60 @@
 #define TINY_LA_IMPLEMENTATION
 #include "tinyla.h"
-#include <assert.h>
-#include <stddef.h>
 #include <stdio.h>
 
-int main() {
-  tla_Arena a = tla_arena_create(1024 * 1024); // 1MB
+static void print_section(const char *title) {
+  printf("\n=== %s ===\n", title);
+}
 
-  tla_Matrix *A = tla_matrix_eye(&a, 5);
-  tla_Vector *b = tla_vector_of_value(&a, 5, 7);
-  tla_vector_set_value(b, 1, -2);
+static void build_example_system(tla_Arena *arena, tla_Matrix **A_out,
+                                 tla_Vector **b_out) {
+  tla_Matrix *A = tla_matrix_eye(arena, 5);
+  tla_Vector *b = tla_vector_of_value(arena, 5, 7.0);
+
+  tla_vector_set_value(b, 1, -2.0);
+
   tla_swap_rows(A, 2, 4);
-  tla_matrix_set_value(A, 2, 0, 5);
-  tla_matrix_set_value(A, 0, 3, -2);
-  tla_matrix_set_value(A, 2, 2, 3);
+  tla_matrix_set_value(A, 2, 0, 5.0);
+  tla_matrix_set_value(A, 0, 3, -2.0);
+  tla_matrix_set_value(A, 2, 2, 3.0);
 
-  printf("A:\n");
+  *A_out = A;
+  *b_out = b;
+}
+
+int main(void) {
+  tla_Arena arena = tla_arena_create(1024 * 1024);
+
+  tla_Matrix *A;
+  tla_Vector *b;
+  build_example_system(&arena, &A, &b);
+
+  print_section("System matrix A");
   tla_print_matrix(A);
 
-  tla_Vector *x = tla_vector_of_value(&a, A->rows, 0);
-  tla_Matrix *Ab = tla_matrix_append_column(&a, A, b);
+  print_section("Right-hand side b");
+  tla_print_vector(b);
+
+  tla_Matrix *Ab = tla_matrix_append_column(&arena, A, b);
+  print_section("Augmented matrix [A | b]");
+  tla_print_matrix(Ab);
+
+  tla_Vector *x = tla_vector_of_value(&arena, A->rows, 0.0);
   gauss_solve(x, Ab);
+
+  print_section("Solution x from Gaussian elimination");
   tla_print_vector(x);
 
-  tla_Vector *check = tla_vector_of_value(&a, A->rows, 0);
-  tla_matrix_tla_vector_mul(check, A, x);
-  tla_print_vector(check);
-  tla_vector_sub(check, check, b);
-  tla_print_vector(check);
+  tla_Vector *Ax = tla_vector_of_shape(&arena, x, 0.0);
+  tla_matrix_tla_vector_mul(Ax, A, x);
 
-  PLUFactorization factor = plu_factor(&a, A);
-  printf("L:\n");
-  tla_print_matrix(factor.L);
-  printf("U:\n");
-  tla_print_matrix(factor.U);
+  print_section("Check: A*x");
+  tla_print_vector(Ax);
 
-  printf("PA:\n");
-  tla_print_matrix(tla_matrix_apply_permutation_new(&a, factor.p, A));
-  printf("LU:\n");
-  tla_print_matrix(tla_matrix_tla_matrix_mul_new(&a, factor.L, factor.U));
+  tla_vector_sub(Ax, Ax, b);
+  print_section("Residual: A*x - b");
+  tla_print_vector(Ax);
 
-  printf("LU solution:\n");
-  tla_Vector *sol = lu_solve(&a, factor, b);
-  tla_print_vector(sol);
-
-  tla_arena_destroy(&a);
+  tla_arena_destroy(&arena);
   return 0;
 }

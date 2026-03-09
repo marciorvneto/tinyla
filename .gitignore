@@ -1,3 +1,14 @@
 out
+
+# 3rd-party
+
+vendor
+
+# Caches
+
+.cache
+
+# LSP-specific
+
 compile_commands.json
 .clangd

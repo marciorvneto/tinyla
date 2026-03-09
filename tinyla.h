@@ -9,6 +9,20 @@
 
 //=============================
 //
+//   Memory alignment
+//
+//=============================
+
+#ifndef TLA_ALIGNMENT
+#define TLA_ALIGNMENT 16
+#endif
+
+// Align must be a power of 2!
+#define TLA_ALIGN_FORWARD(offset, align)                                       \
+  (((offset) + ((align) - 1)) & ~((align) - 1))
+
+//=============================
+//
 //   tla_Arena
 //
 //=============================
@@ -52,19 +66,17 @@ tla_Vector *tla_vector_create(tla_Arena *a, size_t size);
 
 // ------------ Matrices ------------------
 
-void tla_matrix_set_value(tla_Matrix *m, size_t row, size_t col, double value);
-double tla_matrix_get_value(tla_Matrix *m, size_t row, size_t col);
 tla_Matrix *tla_matrix_clone(tla_Arena *a, tla_Matrix *m);
 tla_Matrix *tla_matrix_of_value(tla_Arena *a, size_t rows, size_t cols,
                                 double value);
+tla_Matrix *tla_matrix_of_shape(tla_Arena *a, tla_Matrix *base, double value);
 tla_Matrix *tla_matrix_eye(tla_Arena *a, size_t size);
 
 // ------------ tla_Vectors ------------------
 
-void tla_vector_set_value(tla_Vector *v, size_t idx, double value);
-double tla_vector_get_value(tla_Vector *v, size_t idx);
 tla_Vector *tla_vector_clone(tla_Arena *a, tla_Vector *v);
 tla_Vector *tla_vector_of_value(tla_Arena *a, size_t size, double value);
+tla_Vector *tla_vector_of_shape(tla_Arena *a, tla_Vector *base, double value);
 
 #define TLA_PRINT_SCI_WIDTH 11
 #define TLA_PRINT_WIDTH 7
@@ -136,7 +148,31 @@ typedef struct {
 } PLUFactorization;
 
 PLUFactorization plu_factor(tla_Arena *a, tla_Matrix *A);
-tla_Vector *lu_solve(tla_Arena *a, PLUFactorization factor, tla_Vector *b);
+tla_Vector *lu_solve(tla_Arena *a, tla_Vector *x, PLUFactorization factor,
+                     tla_Vector *b);
+
+//=============================
+//
+//   Static inline helpers
+//
+//=============================
+
+static inline void tla_matrix_set_value(tla_Matrix *m, size_t row, size_t col,
+                                        double value) {
+  m->values[row * m->cols + col] = value;
+}
+static inline double tla_matrix_get_value(tla_Matrix *m, size_t row,
+                                          size_t col) {
+  return m->values[row * m->cols + col];
+}
+
+static inline void tla_vector_set_value(tla_Vector *v, size_t idx,
+                                        double value) {
+  v->values[idx] = value;
+}
+static inline double tla_vector_get_value(tla_Vector *v, size_t idx) {
+  return v->values[idx];
+}
 
 #ifdef TINY_LA_IMPLEMENTATION
 
@@ -149,18 +185,17 @@ tla_Vector *lu_solve(tla_Arena *a, PLUFactorization factor, tla_Vector *b);
 tla_Arena tla_arena_create(size_t capacity) {
   tla_Arena a = {0};
   a.capacity = capacity;
-  a.base = malloc(capacity);
+  a.base = aligned_alloc(TLA_ALIGNMENT, capacity);
   return a;
 }
 
 void *tla_arena_alloc(tla_Arena *a, size_t size) {
-  // 8-bit aligned
-  size_t aligned = (size + 7) & ~7;
-  if (a->offset + aligned >= a->capacity) {
+  size_t aligned_offset = TLA_ALIGN_FORWARD(a->offset, TLA_ALIGNMENT);
+  if (aligned_offset + size > a->capacity) {
     return NULL;
   }
-  char *addr = a->base + a->offset;
-  a->offset += aligned;
+  char *addr = a->base + aligned_offset;
+  a->offset = aligned_offset + size;
   return addr;
 }
 
@@ -201,13 +236,6 @@ tla_Vector *tla_vector_create(tla_Arena *a, size_t size) {
 
 // ------------ Matrices ------------------
 
-void tla_matrix_set_value(tla_Matrix *m, size_t row, size_t col, double value) {
-  m->values[row * m->cols + col] = value;
-}
-double tla_matrix_get_value(tla_Matrix *m, size_t row, size_t col) {
-  return m->values[row * m->cols + col];
-}
-
 tla_Matrix *tla_matrix_clone(tla_Arena *a, tla_Matrix *m) {
   tla_Matrix *new = tla_matrix_create(a, m->rows, m->cols);
   for (size_t i = 0; i < m->rows; i++) {
@@ -229,6 +257,16 @@ tla_Matrix *tla_matrix_of_value(tla_Arena *a, size_t rows, size_t cols,
   return m;
 }
 
+tla_Matrix *tla_matrix_of_shape(tla_Arena *a, tla_Matrix *base, double value) {
+  tla_Matrix *m = tla_matrix_create(a, base->rows, base->cols);
+  for (size_t i = 0; i < m->rows; i++) {
+    for (size_t j = 0; j < m->cols; j++) {
+      m->values[m->cols * i + j] = value;
+    }
+  }
+  return m;
+}
+
 tla_Matrix *tla_matrix_eye(tla_Arena *a, size_t size) {
   tla_Matrix *m = tla_matrix_create(a, size, size);
   for (size_t i = 0; i < m->rows; i++) {
@@ -240,13 +278,6 @@ tla_Matrix *tla_matrix_eye(tla_Arena *a, size_t size) {
 
 // ------------ tla_Vectors ------------------
 
-void tla_vector_set_value(tla_Vector *v, size_t idx, double value) {
-  v->values[idx] = value;
-}
-double tla_vector_get_value(tla_Vector *v, size_t idx) {
-  return v->values[idx];
-}
-
 tla_Vector *tla_vector_clone(tla_Arena *a, tla_Vector *v) {
   tla_Vector *new = tla_vector_create(a, v->size);
   for (size_t i = 0; i < v->size; i++) {
@@ -257,6 +288,14 @@ tla_Vector *tla_vector_clone(tla_Arena *a, tla_Vector *v) {
 
 tla_Vector *tla_vector_of_value(tla_Arena *a, size_t size, double value) {
   tla_Vector *v = tla_vector_create(a, size);
+  for (size_t i = 0; i < v->size; i++) {
+    v->values[i] = value;
+  }
+  return v;
+}
+
+tla_Vector *tla_vector_of_shape(tla_Arena *a, tla_Vector *base, double value) {
+  tla_Vector *v = tla_vector_create(a, base->size);
   for (size_t i = 0; i < v->size; i++) {
     v->values[i] = value;
   }
@@ -529,7 +568,10 @@ tla_Vector *gauss_solve_new(tla_Arena *a, tla_Matrix *aug, int *code) {
   tla_Vector *x = tla_vector_create(a, aug->rows);
   if (!x)
     return NULL;
-  *code = gauss_solve(x, aug);
+  size_t scratch = tla_arena_save(a);
+  tla_Matrix *aug_clone = tla_matrix_clone(a, aug);
+  *code = gauss_solve(x, aug_clone);
+  tla_arena_restore(a, scratch);
   return x;
 }
 
@@ -635,9 +677,9 @@ PLUFactorization plu_factor(tla_Arena *a, tla_Matrix *A) {
   return factor;
 }
 
-tla_Vector *lu_solve(tla_Arena *a, PLUFactorization factor, tla_Vector *b) {
+tla_Vector *lu_solve(tla_Arena *a, tla_Vector *x, PLUFactorization factor,
+                     tla_Vector *b) {
   size_t scratch = tla_arena_save(a);
-  tla_Vector *x = tla_vector_create(a, b->size);
   tla_Vector *y = tla_vector_create(a, b->size);
   tla_Vector *Pb = tla_vector_apply_permutation_new(a, factor.p, b);
   lu_forward(factor.L, Pb, y);

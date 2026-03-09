@@ -25,16 +25,16 @@ int main(void) {
   print_section("Row Matrix (M^T)");
   tla_print_matrix(m_row);
 
-  tla_Matrix *outer = tla_matrix_tla_matrix_mul_new(&a, m_col, m_row);
+  tla_Matrix *outer = tla_matrix_matrix_mul_new(&a, m_col, m_row);
   print_section("Outer Product (M * M^T) -> 3x3 Matrix");
   tla_print_matrix(outer);
 
-  tla_Matrix *inner = tla_matrix_tla_matrix_mul_new(&a, m_row, m_col);
+  tla_Matrix *inner = tla_matrix_matrix_mul_new(&a, m_row, m_col);
   print_section("Inner Product (M^T * M) -> 1x1 Matrix");
   tla_print_matrix(inner);
 
   tla_Matrix *eye = tla_matrix_eye(&a, 3);
-  tla_Matrix *eye_check = tla_matrix_tla_matrix_mul_new(&a, eye, outer);
+  tla_Matrix *eye_check = tla_matrix_matrix_mul_new(&a, eye, outer);
   print_section("Check: Identity * Outer Product");
   tla_print_matrix(eye_check);
 

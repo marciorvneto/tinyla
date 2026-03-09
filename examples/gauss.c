@@ -40,13 +40,13 @@ int main(void) {
   tla_print_matrix(Ab);
 
   tla_Vector *x = tla_vector_of_value(&arena, A->rows, 0.0);
-  gauss_solve(x, Ab);
+  tla_gauss_solve(x, Ab);
 
   print_section("Solution x from Gaussian elimination");
   tla_print_vector(x);
 
   tla_Vector *Ax = tla_vector_of_shape(&arena, x, 0.0);
-  tla_matrix_tla_vector_mul(Ax, A, x);
+  tla_matrix_vector_mul(Ax, A, x);
 
   print_section("Check: A*x");
   tla_print_vector(Ax);

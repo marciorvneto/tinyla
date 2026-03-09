@@ -35,7 +35,7 @@ int main(void) {
   print_section("Right-hand side b");
   tla_print_vector(b);
 
-  PLUFactorization plu = plu_factor(&arena, A);
+  tla_PLUFactorization plu = tla_plu_factor(&arena, A);
 
   print_section("Permutation-applied matrix P*A");
   tla_print_matrix(tla_matrix_apply_permutation_new(&arena, plu.p, A));
@@ -47,16 +47,16 @@ int main(void) {
   tla_print_matrix(plu.U);
 
   print_section("Product L*U");
-  tla_print_matrix(tla_matrix_tla_matrix_mul_new(&arena, plu.L, plu.U));
+  tla_print_matrix(tla_matrix_matrix_mul_new(&arena, plu.L, plu.U));
 
   tla_Vector *x = tla_vector_of_shape(&arena, b, 0.0);
-  lu_solve(&arena, x, plu, b);
+  tla_lu_solve(&arena, x, plu, b);
 
   print_section("Solution x from LU");
   tla_print_vector(x);
 
   tla_Vector *Ax = tla_vector_of_shape(&arena, b, 0.0);
-  tla_matrix_tla_vector_mul(Ax, A, x);
+  tla_matrix_vector_mul(Ax, A, x);
 
   print_section("Check: A*x");
   tla_print_vector(Ax);

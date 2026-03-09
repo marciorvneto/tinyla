@@ -46,10 +46,10 @@ int main(void) {
     tla_vector_set_value(b, 1, -2.0);
 
     // 3. Factorize and solve
-    PLUFactorization plu = plu_factor(&arena, A);
+    tla_PLUFactorization plu = plu_factor(&arena, A);
     tla_Vector *x = tla_vector_of_shape(&arena, b, 0.0);
 
-    lu_solve(&arena, x, plu, b);
+    tla_lu_solve(&arena, x, plu, b);
 
     // 4. Output results
     printf("Solution x:\n");

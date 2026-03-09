@@ -132,16 +132,32 @@ double tla_vector_norm2(tla_Vector *v1);
 
 // ------
 
-void tla_matrix_tla_vector_mul(tla_Vector *out, tla_Matrix *m, tla_Vector *v);
-tla_Vector *tla_matrix_tla_vector_mul_new(tla_Arena *a, tla_Matrix *m,
-                                          tla_Vector *v);
+void tla_matrix_vector_mul(tla_Vector *out, tla_Matrix *m, tla_Vector *v);
+tla_Vector *tla_matrix_vector_mul_new(tla_Arena *a, tla_Matrix *m,
+                                      tla_Vector *v);
 
 // ------
 
-void tla_matrix_tla_matrix_mul(tla_Matrix *out, tla_Matrix *m1, tla_Matrix *m2);
-tla_Matrix *tla_matrix_tla_matrix_mul_new(tla_Arena *a, tla_Matrix *m1,
-                                          tla_Matrix *m2);
+void tla_matrix_matrix_mul(tla_Matrix *out, tla_Matrix *m1, tla_Matrix *m2);
+tla_Matrix *tla_matrix_matrix_mul_new(tla_Arena *a, tla_Matrix *m1,
+                                      tla_Matrix *m2);
 
+// ------
+
+void tla_matrix_matrix_add(tla_Matrix *out, tla_Matrix *m1, tla_Matrix *m2);
+tla_Matrix *tla_matrix_matrix_add_new(tla_Arena *a, tla_Matrix *m1,
+                                      tla_Matrix *m2);
+// ------
+
+void tla_matrix_matrix_sub(tla_Matrix *out, tla_Matrix *m1, tla_Matrix *m2);
+tla_Matrix *tla_matrix_matrix_sub_new(tla_Arena *a, tla_Matrix *m1,
+                                      tla_Matrix *m2);
+
+// ------
+
+void tla_matrix_scalar_mul(tla_Matrix *out, tla_Matrix *m, double scalar);
+tla_Matrix *tla_matrix_scalar_mul_new(tla_Arena *a, tla_Matrix *m,
+                                      double scalar);
 //=============================
 //
 //   Linear Algebra
@@ -150,26 +166,34 @@ tla_Matrix *tla_matrix_tla_matrix_mul_new(tla_Arena *a, tla_Matrix *m1,
 
 // -------- Gauss -------------
 
-int gauss_solve(tla_Vector *x, tla_Matrix *aug);
-tla_Vector *gauss_solve_new(tla_Arena *a, tla_Matrix *aug, int *code);
+int tla_gauss_solve(tla_Vector *x, tla_Matrix *aug);
+tla_Vector *tla_gauss_solve_new(tla_Arena *a, tla_Matrix *aug, int *code);
 
 // -------- LU -------------
 
-void swap_indices(size_t *indices, size_t i, size_t j);
-int plu(size_t *p, tla_Matrix *L, tla_Matrix *U, tla_Matrix *A);
-void lu_forward(tla_Matrix *L, tla_Vector *Pb, tla_Vector *y);
-void lu_backward(tla_Matrix *U, tla_Vector *y, tla_Vector *x);
+void tla_swap_indices(size_t *indices, size_t i, size_t j);
+int tla_plu(size_t *p, tla_Matrix *L, tla_Matrix *U, tla_Matrix *A);
+void tla_lu_forward(tla_Matrix *L, tla_Vector *Pb, tla_Vector *y);
+void tla_lu_backward(tla_Matrix *U, tla_Vector *y, tla_Vector *x);
 
 typedef struct {
   size_t *p;
   tla_Matrix *L;
   tla_Matrix *U;
-} PLUFactorization;
+} tla_PLUFactorization;
 
-PLUFactorization plu_factor(tla_Arena *a, tla_Matrix *A);
-tla_Vector *lu_solve(tla_Arena *a, tla_Vector *x, PLUFactorization factor,
-                     tla_Vector *b);
+tla_PLUFactorization tla_plu_factor(tla_Arena *a, tla_Matrix *A);
+tla_Vector *tla_lu_solve(tla_Arena *a, tla_Vector *x,
+                         tla_PLUFactorization factor, tla_Vector *b);
 
+// ----------- Eigenvalues -----------
+
+// u must be a unit vector
+tla_Matrix *tls_householder(tla_Arena *a, tla_Vector *u);
+void tla_apply_householder_left(tla_Matrix *A, tla_Vector *u, size_t row_start,
+                                size_t col_start);
+void tla_apply_householder_right(tla_Matrix *A, tla_Vector *u, size_t row_start,
+                                 size_t col_start);
 //=============================
 //
 //   Static inline helpers
@@ -546,7 +570,7 @@ double tla_vector_norm2(tla_Vector *v1) { return tla_vector_dot(v1, v1); }
 
 // ------
 
-void tla_matrix_tla_vector_mul(tla_Vector *out, tla_Matrix *m, tla_Vector *v) {
+void tla_matrix_vector_mul(tla_Vector *out, tla_Matrix *m, tla_Vector *v) {
   assert(m->cols == v->size);
   assert(out->size == m->rows);
   for (size_t i = 0; i < m->rows; i++) {
@@ -557,18 +581,17 @@ void tla_matrix_tla_vector_mul(tla_Vector *out, tla_Matrix *m, tla_Vector *v) {
     tla_vector_set_value(out, i, acum);
   }
 }
-tla_Vector *tla_matrix_tla_vector_mul_new(tla_Arena *a, tla_Matrix *m,
-                                          tla_Vector *v) {
+tla_Vector *tla_matrix_vector_mul_new(tla_Arena *a, tla_Matrix *m,
+                                      tla_Vector *v) {
   assert(m->cols == v->size);
   tla_Vector *res = tla_vector_create(a, m->rows);
-  tla_matrix_tla_vector_mul(res, m, v);
+  tla_matrix_vector_mul(res, m, v);
   return res;
 }
 
 // ------
 
-void tla_matrix_tla_matrix_mul(tla_Matrix *out, tla_Matrix *m1,
-                               tla_Matrix *m2) {
+void tla_matrix_matrix_mul(tla_Matrix *out, tla_Matrix *m1, tla_Matrix *m2) {
   assert(m1->cols == m2->rows);
   assert(out->cols == m2->cols);
   assert(out->rows == m1->rows);
@@ -582,11 +605,71 @@ void tla_matrix_tla_matrix_mul(tla_Matrix *out, tla_Matrix *m1,
     }
   }
 }
-tla_Matrix *tla_matrix_tla_matrix_mul_new(tla_Arena *a, tla_Matrix *m1,
-                                          tla_Matrix *m2) {
+tla_Matrix *tla_matrix_matrix_mul_new(tla_Arena *a, tla_Matrix *m1,
+                                      tla_Matrix *m2) {
   assert(m1->cols == m2->rows);
   tla_Matrix *res = tla_matrix_create(a, m1->rows, m2->cols);
-  tla_matrix_tla_matrix_mul(res, m1, m2);
+  tla_matrix_matrix_mul(res, m1, m2);
+  return res;
+}
+
+// ------
+
+void tla_matrix_matrix_add(tla_Matrix *out, tla_Matrix *m1, tla_Matrix *m2) {
+  assert(m1->cols == m2->rows);
+  assert(out->cols == m2->cols);
+  assert(out->rows == m1->rows);
+  for (size_t i = 0; i < out->rows; i++) {
+    for (size_t j = 0; j < out->cols; j++) {
+      tla_matrix_set_value(out, i, j,
+                           tla_matrix_get_value(m1, i, j) +
+                               tla_matrix_get_value(m2, i, j));
+    }
+  }
+}
+tla_Matrix *tla_matrix_matrix_add_new(tla_Arena *a, tla_Matrix *m1,
+                                      tla_Matrix *m2) {
+  assert(m1->cols == m2->rows);
+  tla_Matrix *res = tla_matrix_create(a, m1->rows, m2->cols);
+  tla_matrix_matrix_add(res, m1, m2);
+  return res;
+}
+
+// ------
+
+void tla_matrix_matrix_sub(tla_Matrix *out, tla_Matrix *m1, tla_Matrix *m2) {
+  assert(m1->cols == m2->rows);
+  assert(out->cols == m2->cols);
+  assert(out->rows == m1->rows);
+  for (size_t i = 0; i < out->rows; i++) {
+    for (size_t j = 0; j < out->cols; j++) {
+      tla_matrix_set_value(out, i, j,
+                           tla_matrix_get_value(m1, i, j) -
+                               tla_matrix_get_value(m2, i, j));
+    }
+  }
+}
+tla_Matrix *tla_matrix_matrix_sub_new(tla_Arena *a, tla_Matrix *m1,
+                                      tla_Matrix *m2) {
+  assert(m1->cols == m2->rows);
+  tla_Matrix *res = tla_matrix_create(a, m1->rows, m2->cols);
+  tla_matrix_matrix_sub(res, m1, m2);
+  return res;
+}
+
+// ------
+
+void tla_matrix_scalar_mul(tla_Matrix *out, tla_Matrix *m, double scalar) {
+  for (size_t i = 0; i < out->rows; i++) {
+    for (size_t j = 0; j < out->cols; j++) {
+      tla_matrix_set_value(out, i, j, tla_matrix_get_value(m, i, j) * scalar);
+    }
+  }
+}
+tla_Matrix *tla_matrix_scalar_mul_new(tla_Arena *a, tla_Matrix *m,
+                                      double scalar) {
+  tla_Matrix *res = tla_matrix_create(a, m->rows, m->cols);
+  tla_matrix_scalar_mul(res, m, scalar);
   return res;
 }
 
@@ -598,7 +681,7 @@ tla_Matrix *tla_matrix_tla_matrix_mul_new(tla_Arena *a, tla_Matrix *m1,
 
 // -------- Gauss -------------
 
-int gauss_solve(tla_Vector *x, tla_Matrix *aug) {
+int tla_gauss_solve(tla_Vector *x, tla_Matrix *aug) {
 
   // First pass
   for (size_t col = 0; col < aug->cols - 1; col++) {
@@ -649,25 +732,25 @@ int gauss_solve(tla_Vector *x, tla_Matrix *aug) {
   }
   return 0;
 }
-tla_Vector *gauss_solve_new(tla_Arena *a, tla_Matrix *aug, int *code) {
+tla_Vector *tla_gauss_solve_new(tla_Arena *a, tla_Matrix *aug, int *code) {
   tla_Vector *x = tla_vector_create(a, aug->rows);
   if (!x)
     return NULL;
   size_t scratch = tla_arena_save(a);
   tla_Matrix *aug_clone = tla_matrix_clone(a, aug);
-  *code = gauss_solve(x, aug_clone);
+  *code = tla_gauss_solve(x, aug_clone);
   tla_arena_restore(a, scratch);
   return x;
 }
 
 // -------- LU -------------
 
-void swap_indices(size_t *indices, size_t i, size_t j) {
+void tla_swap_indices(size_t *indices, size_t i, size_t j) {
   size_t tmp = indices[i];
   indices[i] = indices[j];
   indices[j] = tmp;
 }
-int plu(size_t *p, tla_Matrix *L, tla_Matrix *U, tla_Matrix *A) {
+int tla_plu(size_t *p, tla_Matrix *L, tla_Matrix *U, tla_Matrix *A) {
   for (size_t i = 0; i < A->rows; i++) {
     p[i] = i;
     for (size_t j = 0; j < A->cols; j++) {
@@ -700,7 +783,7 @@ int plu(size_t *p, tla_Matrix *L, tla_Matrix *U, tla_Matrix *A) {
 
     if (pivot_idx != start_row) {
       tla_swap_rows(U, pivot_idx, start_row);
-      swap_indices(p, pivot_idx, start_row);
+      tla_swap_indices(p, pivot_idx, start_row);
 
       // Swap everything that came before.
       // The rightmose structure needs to remain
@@ -724,7 +807,7 @@ int plu(size_t *p, tla_Matrix *L, tla_Matrix *U, tla_Matrix *A) {
   }
   return 0;
 }
-void lu_forward(tla_Matrix *L, tla_Vector *Pb, tla_Vector *y) {
+void tla_lu_forward(tla_Matrix *L, tla_Vector *Pb, tla_Vector *y) {
   // a11 x1                      = b1
   // a21 x1 + a22 x2             = b2
   // a31 x1 + a32 x2 + a32 x3    = b3
@@ -738,7 +821,7 @@ void lu_forward(tla_Matrix *L, tla_Vector *Pb, tla_Vector *y) {
     tla_vector_set_value(y, i, b - acum);
   }
 }
-void lu_backward(tla_Matrix *U, tla_Vector *y, tla_Vector *x) {
+void tla_lu_backward(tla_Matrix *U, tla_Vector *y, tla_Vector *x) {
   // a11 x1 + a12 x2 + a12 x3    = b1
   //          a22 x2 + a23 x3    = b2
   //                   a33 x3    = b3
@@ -753,25 +836,101 @@ void lu_backward(tla_Matrix *U, tla_Vector *y, tla_Vector *x) {
   }
 }
 
-PLUFactorization plu_factor(tla_Arena *a, tla_Matrix *A) {
-  PLUFactorization factor;
+tla_PLUFactorization tla_plu_factor(tla_Arena *a, tla_Matrix *A) {
+  tla_PLUFactorization factor;
   factor.p = tla_arena_alloc(a, A->rows * sizeof(size_t));
   factor.L = tla_matrix_of_value(a, A->rows, A->cols, 0);
   factor.U = tla_matrix_of_value(a, A->rows, A->cols, 0);
-  plu(factor.p, factor.L, factor.U, A);
+  tla_plu(factor.p, factor.L, factor.U, A);
   return factor;
 }
 
-tla_Vector *lu_solve(tla_Arena *a, tla_Vector *x, PLUFactorization factor,
-                     tla_Vector *b) {
+tla_Vector *tla_lu_solve(tla_Arena *a, tla_Vector *x,
+                         tla_PLUFactorization factor, tla_Vector *b) {
   size_t scratch = tla_arena_save(a);
   tla_Vector *y = tla_vector_create(a, b->size);
   tla_Vector *Pb = tla_vector_apply_permutation_new(a, factor.p, b);
-  lu_forward(factor.L, Pb, y);
-  lu_backward(factor.U, y, x);
+  tla_lu_forward(factor.L, Pb, y);
+  tla_lu_backward(factor.U, y, x);
   tla_arena_restore(a, scratch);
   return x;
 }
+
+// ----------- Eigenvalues -----------
+
+// u must be a unit vector
+tla_Matrix *tls_householder(tla_Arena *a, tla_Vector *u) {
+  tla_Matrix *H = tla_matrix_create(a, u->size, u->size);
+
+  for (size_t row = 0; row < u->size; row++) {
+    for (size_t col = 0; col < u->size; col++) {
+      // Identity part
+      double val = (row == col) ? 1.0 : 0.0;
+      // Subtract the outer product part: 2 * u * u^T
+      val -= 2.0 * tla_vector_get_value(u, row) * tla_vector_get_value(u, col);
+
+      tla_matrix_set_value(H, row, col, val);
+    }
+  }
+  return H;
+}
+
+// Applies the Householder reflection H = I - 2uu^T directly to matrix A
+// in-place u must be a unit vector with size equal to A->rows
+void tla_apply_householder_left(tla_Matrix *A, tla_Vector *u, size_t row_start,
+                                size_t col_start) {
+  for (size_t col = col_start; col < A->cols; col++) {
+    double dot = 0.0;
+    for (size_t i = 0; i < u->size; i++) {
+      dot += tla_vector_get_value(u, i) *
+             tla_matrix_get_value(A, row_start + i, col);
+    }
+    for (size_t i = 0; i < u->size; i++) {
+      double val = tla_matrix_get_value(A, row_start + i, col);
+      tla_matrix_set_value(A, row_start + i, col,
+                           val - 2.0 * dot * tla_vector_get_value(u, i));
+    }
+  }
+}
+
+// Applies the Householder reflection H = I - 2uu^T to matrix A on the right
+// in-place u must be a unit vector with size equal to A->rows
+void tla_apply_householder_right(tla_Matrix *A, tla_Vector *u, size_t row_start,
+                                 size_t col_start) {
+  for (size_t row = row_start; row < A->rows; row++) {
+    double dot = 0.0;
+    for (size_t i = 0; i < u->size; i++) {
+      dot += tla_matrix_get_value(A, row, col_start + i) *
+             tla_vector_get_value(u, i);
+    }
+    for (size_t i = 0; i < u->size; i++) {
+      double val = tla_matrix_get_value(A, row, col_start + i);
+      tla_matrix_set_value(A, row, col_start + i,
+                           val - 2.0 * dot * tla_vector_get_value(u, i));
+    }
+  }
+}
+
+// void tls_upper_hessenberg(tla_Arena *a, tla_Matrix *m) {
+//   // We keep creating these matrices and applying them
+//   // to the original one. Hn-1 are (N-1)-dimensional
+//   // Householder reflection matrices
+//   //
+//   // | 1 0 0 0 ... 0 |
+//   // | 0             |
+//   // | 0    Hn-1     |
+//   // | 0             |
+//   // | 0             |
+//   //
+//
+//   for (size_t i = 0; i < m->cols - 1; m++) {
+//
+//     tla_Matrix *H = tla_matrix_create(a, m->rows - i - 1, m->cols - i - 1);
+//     for (size_t j = i; i < m->cols - 1; j++) {
+//     }
+//   }
+// }
+
 #endif // TINY_LA_IMPLEMENTATION
 
 #endif // TINY_LA_H

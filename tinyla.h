@@ -74,6 +74,7 @@ tla_Matrix *tla_matrix_eye(tla_Arena *a, size_t size);
 
 // ------------ Vectors ------------------
 
+tla_Vector tla_vector_slice(tla_Vector *v, size_t start_index, size_t length);
 tla_Vector *tla_vector_clone(tla_Arena *a, tla_Vector *v);
 tla_Vector *tla_vector_of_value(tla_Arena *a, size_t size, double value);
 tla_Vector *tla_vector_of_shape(tla_Arena *a, tla_Vector *base, double value);
@@ -129,6 +130,12 @@ tla_Vector *tla_vector_vec_new(tla_Arena *a, tla_Vector *v1, tla_Vector *v2);
 // ------
 
 double tla_vector_norm2(tla_Vector *v1);
+double tla_vector_norm(tla_Vector *v1);
+
+// ------
+
+void tla_vector_normalize(tla_Vector *out, tla_Vector *v);
+tla_Vector *tla_vector_normalize_new(tla_Arena *a, tla_Vector *v);
 
 // ------
 
@@ -189,7 +196,7 @@ tla_Vector *tla_lu_solve(tla_Arena *a, tla_Vector *x,
 // ----------- Eigenvalues -----------
 
 // u must be a unit vector
-tla_Matrix *tls_householder(tla_Arena *a, tla_Vector *u);
+tla_Matrix *tla_householder(tla_Arena *a, tla_Vector *u);
 void tla_apply_householder_left(tla_Matrix *A, tla_Vector *u, size_t row_start,
                                 size_t col_start);
 void tla_apply_householder_right(tla_Matrix *A, tla_Vector *u, size_t row_start,
@@ -320,6 +327,16 @@ tla_Matrix *tla_matrix_eye(tla_Arena *a, size_t size) {
 }
 
 // ------------ tla_Vectors ------------------
+
+tla_Vector tla_vector_slice(tla_Vector *v, size_t start_index, size_t length) {
+  int n = (int)length - (int)start_index;
+  assert(n >= 0);
+  assert(n <= v->size);
+  tla_Vector slice;
+  slice.size = n;
+  slice.values = v->values + start_index;
+  return slice;
+}
 
 tla_Vector *tla_vector_clone(tla_Arena *a, tla_Vector *v) {
   tla_Vector *new = tla_vector_create(a, v->size);
@@ -567,9 +584,24 @@ tla_Vector *tla_vector_vec_new(tla_Arena *a, tla_Vector *v1, tla_Vector *v2) {
 // ------
 
 double tla_vector_norm2(tla_Vector *v1) { return tla_vector_dot(v1, v1); }
+double tla_vector_norm(tla_Vector *v1) { return sqrt(tla_vector_dot(v1, v1)); }
 
 // ------
 
+void tla_vector_normalize(tla_Vector *out, tla_Vector *v) {
+  double norm = sqrt(tla_vector_norm2(v));
+  for (size_t i = 0; i < v->size; i++) {
+    tla_vector_set_value(out, i, tla_vector_get_value(v, i) / norm);
+  }
+}
+
+tla_Vector *tla_vector_normalize_new(tla_Arena *a, tla_Vector *v) {
+  tla_Vector *res = tla_vector_clone(a, v);
+  tla_vector_normalize(res, v);
+  return res;
+}
+
+// ------
 void tla_matrix_vector_mul(tla_Vector *out, tla_Matrix *m, tla_Vector *v) {
   assert(m->cols == v->size);
   assert(out->size == m->rows);
@@ -859,7 +891,7 @@ tla_Vector *tla_lu_solve(tla_Arena *a, tla_Vector *x,
 // ----------- Eigenvalues -----------
 
 // u must be a unit vector
-tla_Matrix *tls_householder(tla_Arena *a, tla_Vector *u) {
+tla_Matrix *tla_householder(tla_Arena *a, tla_Vector *u) {
   tla_Matrix *H = tla_matrix_create(a, u->size, u->size);
 
   for (size_t row = 0; row < u->size; row++) {
@@ -911,25 +943,42 @@ void tla_apply_householder_right(tla_Matrix *A, tla_Vector *u, size_t row_start,
   }
 }
 
-// void tls_upper_hessenberg(tla_Arena *a, tla_Matrix *m) {
-//   // We keep creating these matrices and applying them
-//   // to the original one. Hn-1 are (N-1)-dimensional
-//   // Householder reflection matrices
-//   //
-//   // | 1 0 0 0 ... 0 |
-//   // | 0             |
-//   // | 0    Hn-1     |
-//   // | 0             |
-//   // | 0             |
-//   //
-//
-//   for (size_t i = 0; i < m->cols - 1; m++) {
-//
-//     tla_Matrix *H = tla_matrix_create(a, m->rows - i - 1, m->cols - i - 1);
-//     for (size_t j = i; i < m->cols - 1; j++) {
-//     }
-//   }
-// }
+tla_Vector *tla_vector_from_matrix_column(tla_Arena *a, tla_Matrix *m,
+                                          size_t column, size_t start_row,
+                                          size_t end_row) {
+  assert(end_row >= start_row);
+  assert(column < m->cols);
+  size_t n = end_row - start_row + 1;
+  tla_Vector *v = tla_vector_create(a, n);
+  for (size_t i = 0; i < n; i++) {
+    tla_vector_set_value(v, i, tla_matrix_get_value(m, start_row + i, column));
+  }
+  return v;
+}
+
+void tla_upper_hessenberg(tla_Arena *a, tla_Matrix *m) {
+  for (size_t i = 0; i + 2 < m->cols; i++) {
+    size_t scratch = tla_arena_save(a);
+    tla_Vector *u = tla_vector_from_matrix_column(a, m, i, i + 1, m->rows - 1);
+
+    double norm = tla_vector_norm(u);
+    if (norm <= 1e-14)
+      continue;
+
+    double sign = tla_vector_get_value(u, 0) >= 0.0 ? 1.0 : -1.0;
+    double alpha = -sign * tla_vector_norm(u);
+    tla_vector_set_value(u, 0, tla_vector_get_value(u, 0) - alpha);
+    tla_vector_normalize(u, u);
+    tla_apply_householder_left(m, u, i + 1, i);
+    tla_apply_householder_right(m, u, 0, i + 1);
+    tla_arena_restore(a, scratch);
+  }
+  for (size_t i = 0; i + 2 < m->cols; i++) {
+    for (size_t j = i + 2; j < m->rows; j++) {
+      tla_matrix_set_value(m, j, i, 0);
+    }
+  }
+}
 
 #endif // TINY_LA_IMPLEMENTATION
 

@@ -11,7 +11,7 @@ BINS := $(patsubst $(EXAMPLES_DIR)/%.c, $(OUT_DIR)/%, $(SRCS))
 
 all: $(BINS)
 
-$(OUT_DIR)/%: $(EXAMPLES_DIR)/%.c | $(OUT_DIR)
+$(OUT_DIR)/%: $(EXAMPLES_DIR)/%.c tinyla.h | $(OUT_DIR)
 	$(CC) -o $@ $< $(CFLAGS)
 
 $(OUT_DIR):

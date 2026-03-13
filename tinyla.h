@@ -183,6 +183,9 @@ int tla_plu(size_t *p, tla_Matrix *L, tla_Matrix *U, tla_Matrix *A);
 void tla_lu_forward(tla_Matrix *L, tla_Vector *Pb, tla_Vector *y);
 void tla_lu_backward(tla_Matrix *U, tla_Vector *y, tla_Vector *x);
 
+// -------- Spectral -------------
+tla_Vector *tla_eigenvalues(tla_Arena *a, tla_Matrix *m);
+
 typedef struct {
   size_t *p;
   tla_Matrix *L;
@@ -956,6 +959,52 @@ tla_Vector *tla_vector_from_matrix_column(tla_Arena *a, tla_Matrix *m,
   return v;
 }
 
+void tla_givens_rotation2(double *a, double *b, double *s, double *c) {
+  // G = | c   s |
+  //     | -s  c |
+  //
+  // Operating on
+  // | a |
+  // | b |
+  //
+  // Giving
+  // | r |
+  // | 0 |
+  //
+  // The following relations hold:
+  //
+  // s = b/r
+  // c = a/r
+  //
+  // Also, we define tau = b/a if |a| >= |b|, or tau = a/b if |b| > |a|
+  // The point of defining tau here is to prevent overflow when calculating
+  // the norm of (a,b) when a and/or b are large;
+  if (fabs(*b) < 1e-14) {
+    *c = 1.0;
+    *s = 0.0;
+    return;
+  }
+  if (fabs(*b) > fabs(*a)) {
+    double tau = *a / *b;
+    double rb = sqrt(1 + tau * tau);
+    *s = 1 / rb;
+    if (*b < 0)
+      *s = -*s;
+    *c = *s * tau;
+    *a = *b / *s;
+    *b = 0;
+  } else {
+    double tau = *b / *a;
+    double ra = sqrt(1 + tau * tau);
+    *c = 1 / ra;
+    if (*a < 0)
+      *c = -*c;
+    *s = *c * tau;
+    *a = *a / *c;
+    *b = 0.0;
+  }
+}
+
 void tla_upper_hessenberg(tla_Arena *a, tla_Matrix *m) {
   for (size_t i = 0; i + 2 < m->cols; i++) {
     size_t scratch = tla_arena_save(a);
@@ -978,6 +1027,94 @@ void tla_upper_hessenberg(tla_Arena *a, tla_Matrix *m) {
       tla_matrix_set_value(m, j, i, 0);
     }
   }
+}
+
+// Performs a single QR iteration step on an Upper Hessenberg matrix
+void tla_hessenberg_qr_step(tla_Arena *arena, tla_Matrix *m) {
+
+  size_t scratch = tla_arena_save(arena);
+  double *c_values = tla_arena_alloc(arena, (m->cols - 1) * sizeof(double));
+  double *s_values = tla_arena_alloc(arena, (m->cols - 1) * sizeof(double));
+
+  // Left-apply QT * H -> R
+  for (size_t i = 0; i < m->cols - 1; i++) {
+    double c, s;
+    double a = tla_matrix_get_value(m, i, i);
+    double b = tla_matrix_get_value(m, i + 1, i);
+    tla_givens_rotation2(&a, &b, &s, &c);
+    s_values[i] = s;
+    c_values[i] = c;
+    tla_matrix_set_value(m, i, i, a);
+    tla_matrix_set_value(m, i + 1, i, b);
+
+    for (size_t k = i + 1; k < m->cols; k++) {
+      double top = tla_matrix_get_value(m, i, k);
+      double bot = tla_matrix_get_value(m, i + 1, k);
+
+      tla_matrix_set_value(m, i, k, c * top + s * bot);
+      tla_matrix_set_value(m, i + 1, k, -s * top + c * bot);
+    }
+  }
+
+  // Right-apply R * Q -> Hnext
+  for (size_t i = 0; i < m->cols - 1; i++) {
+    double c = c_values[i];
+    double s = s_values[i];
+
+    for (size_t k = 0; k <= i + 1; k++) {
+      double left = tla_matrix_get_value(m, k, i);
+      double right = tla_matrix_get_value(m, k, i + 1);
+
+      tla_matrix_set_value(m, k, i, c * left + s * right);
+      tla_matrix_set_value(m, k, i + 1, -s * left + c * right);
+    }
+  }
+
+  tla_arena_restore(arena, scratch);
+}
+
+// Returns a flat Vector of only the [real] parts of the eigenvalues
+tla_Vector *tla_eigenvalues(tla_Arena *a, tla_Matrix *m) {
+  tla_Vector *eig = tla_vector_create(a, m->cols);
+  size_t scratch = tla_arena_save(a);
+
+  tla_Matrix *new_m = tla_matrix_clone(a, m);
+  tla_upper_hessenberg(a, new_m);
+
+  double biggest = 1.0;
+  size_t step = 0;
+
+  while (biggest > 1e-12 && step < 1000) {
+    biggest = 0.0;
+    for (size_t k = 0; k < new_m->cols - 1; k++) {
+      double val = fabs(tla_matrix_get_value(new_m, k + 1, k));
+      if (val > biggest)
+        biggest = val;
+    }
+    if (biggest <= 1e-12)
+      break;
+    tla_hessenberg_qr_step(a, new_m);
+    step++;
+  }
+
+  // Extract purely real parts
+  for (size_t i = 0; i < new_m->cols; i++) {
+    if (i < new_m->cols - 1 &&
+        fabs(tla_matrix_get_value(new_m, i + 1, i)) > 1e-12) {
+      double a_val = tla_matrix_get_value(new_m, i, i);
+      double d_val = tla_matrix_get_value(new_m, i + 1, i + 1);
+      double real_part = (a_val + d_val) / 2.0;
+
+      tla_vector_set_value(eig, i, real_part);
+      tla_vector_set_value(eig, i + 1, real_part);
+      i++; // Skip the second half of the 2x2 block
+    } else {
+      tla_vector_set_value(eig, i, tla_matrix_get_value(new_m, i, i));
+    }
+  }
+
+  tla_arena_restore(a, scratch);
+  return eig;
 }
 
 #endif // TINY_LA_IMPLEMENTATION

@@ -139,6 +139,12 @@ tla_Vector *tla_vector_normalize_new(tla_Arena *a, tla_Vector *v);
 
 // ------
 
+void tla_vector_scalar_mul(tla_Vector *out, tla_Vector *v, double scalar);
+tla_Vector *tla_vector_scalar_mul_new(tla_Arena *a, tla_Vector *v,
+                                      double scalar);
+
+// ------
+
 void tla_matrix_vector_mul(tla_Vector *out, tla_Matrix *m, tla_Vector *v);
 tla_Vector *tla_matrix_vector_mul_new(tla_Arena *a, tla_Matrix *m,
                                       tla_Vector *v);
@@ -601,6 +607,21 @@ void tla_vector_normalize(tla_Vector *out, tla_Vector *v) {
 tla_Vector *tla_vector_normalize_new(tla_Arena *a, tla_Vector *v) {
   tla_Vector *res = tla_vector_clone(a, v);
   tla_vector_normalize(res, v);
+  return res;
+}
+
+// ------
+
+void tla_vector_scalar_mul(tla_Vector *out, tla_Vector *v, double scalar){
+  for (size_t i = 0; i < v->size; i++) {
+    tla_vector_set_value(out, i, tla_vector_get_value(v, i) * scalar);
+  }
+}
+
+tla_Vector *tla_vector_scalar_mul_new(tla_Arena *a, tla_Vector *v,
+                                      double scalar){
+  tla_Vector *res = tla_vector_clone(a, v);
+  tla_vector_scalar_mul(res, v, scalar);
   return res;
 }
 

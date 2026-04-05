@@ -171,6 +171,113 @@ tla_Matrix *tla_matrix_matrix_sub_new(tla_Arena *a, tla_Matrix *m1,
 void tla_matrix_scalar_mul(tla_Matrix *out, tla_Matrix *m, double scalar);
 tla_Matrix *tla_matrix_scalar_mul_new(tla_Arena *a, tla_Matrix *m,
                                       double scalar);
+// ------
+
+
+/**
+ * Applies an active rotation about the x axis.
+ *
+ * The rotated vector is written to `out`.
+ * A positive angle follows the right-hand rule.
+ *
+ * Equivalently, this is the passive coordinate transformation from a frame
+ * rotated by -angle_rad back to the original frame.
+ */
+void tla_apply_rot_x(tla_Vector *out, double angle_rad);
+
+/**
+ * Returns a newly allocated vector equal to `v` after an active rotation
+ * by angle_rad about the x axis.
+ */
+tla_Vector *tla_apply_rot_x_new(tla_Arena *a, tla_Vector *v, double angle_rad);
+
+/**
+ * Applies a passive rotation about the x axis.
+ *
+ * The transformed coordinates are written to `out`.
+ * This keeps the geometric vector fixed and expresses it in a frame
+ * rotated by +angle_rad about the +x axis.
+ *
+ * Equivalently, this is the active x-axis rotation by -angle_rad.
+ */
+void tla_apply_rot_x_passive(tla_Vector *out, double angle_rad);
+
+/**
+ * Returns a newly allocated vector equal to `v` after the passive rotation
+ * by angle_rad about the x axis.
+ */
+tla_Vector *tla_apply_rot_x_passive_new(tla_Arena *a, tla_Vector *v, double angle_rad);
+
+
+/**
+ * Applies an active rotation about the y axis.
+ *
+ * The rotated vector is written to `out`.
+ * A positive angle follows the right-hand rule.
+ *
+ * Equivalently, this is the passive coordinate transformation from a frame
+ * rotated by -angle_rad back to the original frame.
+ */
+void tla_apply_rot_y(tla_Vector *out, double angle_rad);
+
+/**
+ * Returns a newly allocated vector equal to `v` after an active rotation
+ * by angle_rad about the y axis.
+ */
+tla_Vector *tla_apply_rot_y_new(tla_Arena *a, tla_Vector *v, double angle_rad);
+
+/**
+ * Applies a passive rotation about the y axis.
+ *
+ * The transformed coordinates are written to `out`.
+ * This keeps the geometric vector fixed and expresses it in a frame
+ * rotated by +angle_rad about the +y axis.
+ *
+ * Equivalently, this is the active y-axis rotation by -angle_rad.
+ */
+void tla_apply_rot_y_passive(tla_Vector *out, double angle_rad);
+
+/**
+ * Returns a newly allocated vector equal to `v` after the passive rotation
+ * by angle_rad about the y axis.
+ */
+tla_Vector *tla_apply_rot_y_passive_new(tla_Arena *a, tla_Vector *v, double angle_rad);
+
+
+/**
+ * Applies an active rotation about the z axis.
+ *
+ * The rotated vector is written to `out`.
+ * A positive angle follows the right-hand rule.
+ *
+ * Equivalently, this is the passive coordinate transformation from a frame
+ * rotated by -angle_rad back to the original frame.
+ */
+void tla_apply_rot_z(tla_Vector *out, double angle_rad);
+
+/**
+ * Returns a newly allocated vector equal to `v` after an active rotation
+ * by angle_rad about the z axis.
+ */
+tla_Vector *tla_apply_rot_z_new(tla_Arena *a, tla_Vector *v, double angle_rad);
+
+/**
+ * Applies a passive rotation about the z axis.
+ *
+ * The transformed coordinates are written to `out`.
+ * This keeps the geometric vector fixed and expresses it in a frame
+ * rotated by +angle_rad about the +z axis.
+ *
+ * Equivalently, this is the active z-axis rotation by -angle_rad.
+ */
+void tla_apply_rot_z_passive(tla_Vector *out, double angle_rad);
+
+/**
+ * Returns a newly allocated vector equal to `v` after the passive rotation
+ * by angle_rad about the z axis.
+ */
+tla_Vector *tla_apply_rot_z_passive_new(tla_Arena *a, tla_Vector *v, double angle_rad);
+
 //=============================
 //
 //   Linear Algebra
@@ -370,6 +477,28 @@ tla_Vector *tla_vector_of_shape(tla_Arena *a, tla_Vector *base, double value) {
   }
   return v;
 }
+
+#define TLA_VECTOR(...)\
+	(\
+		(tla_Vector){ \
+			.size   = sizeof((double[]){__VA_ARGS__})/sizeof(double),\
+			.values = (double[]){__VA_ARGS__}\
+		}\
+	 }\
+	)
+
+/**
+ * Allocates a 2-element vector on the stack.
+ */
+#define tla_vec2(x,y)     TLA_VECTOR((x), (y))
+/**
+ * Allocates a 3-element vector on the stack.
+ */
+#define tla_vec3(x,y,z)   TLA_VECTOR((x), (y), (z))
+/**
+ * Allocates a 4-element vector on the stack.
+ */
+#define tla_vec4(x,y,z,w) TLA_VECTOR((x), (y), (z), (w))
 
 // ------------ Conversions ------------------
 
@@ -727,6 +856,84 @@ tla_Matrix *tla_matrix_scalar_mul_new(tla_Arena *a, tla_Matrix *m,
   tla_Matrix *res = tla_matrix_create(a, m->rows, m->cols);
   tla_matrix_scalar_mul(res, m, scalar);
   return res;
+}
+
+// ------
+
+void tla_apply_rot_x(tla_Vector *out, double angle_rad){
+	assert(out->size == 3);
+	double x = tla_vector_get_value(out, 0);
+	double y = tla_vector_get_value(out, 1);
+	double z = tla_vector_get_value(out, 2);
+	double c = cos(angle_rad);
+	double s = sin(angle_rad);
+	tla_vector_set_value(out, 0, x);
+	tla_vector_set_value(out, 1, y * c - z * s);
+	tla_vector_set_value(out, 2, y * s + z * c);
+}
+tla_Vector *tla_apply_rot_x_new(tla_Arena *a, tla_Vector *v, double angle_rad){
+	tla_Vector *new_v = tla_vector_clone(a, v);
+	tla_apply_rot_x(new_v, angle_rad);
+	return new_v;
+}
+void tla_apply_rot_x_passive(tla_Vector *out, double angle_rad){
+	tla_apply_rot_x(out, -angle_rad);
+}
+tla_Vector *tla_apply_rot_x_passive_new(tla_Arena *a, tla_Vector *v, double angle_rad){
+	tla_Vector *new_v = tla_vector_clone(a, v);
+	tla_apply_rot_x_passive(new_v, angle_rad);
+	return new_v;
+}
+
+
+void tla_apply_rot_y(tla_Vector *out, double angle_rad){
+	assert(out->size == 3);
+	double x = tla_vector_get_value(out, 0);
+	double y = tla_vector_get_value(out, 1);
+	double z = tla_vector_get_value(out, 2);
+	double c = cos(angle_rad);
+	double s = sin(angle_rad);
+	tla_vector_set_value(out, 0, x * c + z * s);
+	tla_vector_set_value(out, 1, y);
+	tla_vector_set_value(out, 2, -x * s + z * c);
+}
+tla_Vector *tla_apply_rot_y_new(tla_Arena *a, tla_Vector *v, double angle_rad){
+	tla_Vector *new_v = tla_vector_clone(a, v);
+	tla_apply_rot_y(new_v, angle_rad);
+	return new_v;
+}
+void tla_apply_rot_y_passive(tla_Vector *out, double angle_rad){
+	tla_apply_rot_y(out, -angle_rad);
+}
+tla_Vector *tla_apply_rot_y_passive_new(tla_Arena *a, tla_Vector *v, double angle_rad){
+	tla_Vector *new_v = tla_vector_clone(a, v);
+	tla_apply_rot_y_passive(new_v, angle_rad);
+	return new_v;
+}
+
+void tla_apply_rot_z(tla_Vector *out, double angle_rad){
+	assert(out->size == 3);
+	double x = tla_vector_get_value(out, 0);
+	double y = tla_vector_get_value(out, 1);
+	double z = tla_vector_get_value(out, 2);
+	double c = cos(angle_rad);
+	double s = sin(angle_rad);
+	tla_vector_set_value(out, 0, x * c - y * s);
+	tla_vector_set_value(out, 1, x * s + y * c);
+	tla_vector_set_value(out, 2, z);
+}
+tla_Vector *tla_apply_rot_z_new(tla_Arena *a, tla_Vector *v, double angle_rad){
+	tla_Vector *new_v = tla_vector_clone(a, v);
+	tla_apply_rot_z(new_v, angle_rad);
+	return new_v;
+}
+void tla_apply_rot_z_passive(tla_Vector *out, double angle_rad){
+	tla_apply_rot_z(out, -angle_rad);
+}
+tla_Vector *tla_apply_rot_z_passive_new(tla_Arena *a, tla_Vector *v, double angle_rad){
+	tla_Vector *new_v = tla_vector_clone(a, v);
+	tla_apply_rot_z_passive(new_v, angle_rad);
+	return new_v;
 }
 
 //=============================

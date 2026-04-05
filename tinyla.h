@@ -478,25 +478,33 @@ tla_Vector *tla_vector_of_shape(tla_Arena *a, tla_Vector *base, double value) {
   return v;
 }
 
-#define TLA_VECTOR(...)\
-	(\
-		(tla_Vector){ \
-			.size   = sizeof((double[]){__VA_ARGS__})/sizeof(double),\
-			.values = (double[]){__VA_ARGS__}\
-		}\
-	 }\
-	)
+#define TLA_VECTOR(...) \
+  ((tla_Vector){ \
+    .size   = sizeof((double[]){__VA_ARGS__}) / sizeof(double), \
+    .values = (double[]){__VA_ARGS__} \
+  })
 
 /**
- * Allocates a 2-element vector on the stack.
+ * Creates a stack-backed 2-element vector.
+ *
+ * The returned tla_Vector points to a temporary array whose lifetime
+ * ends at the end of the enclosing block.
  */
 #define tla_vec2(x,y)     TLA_VECTOR((x), (y))
+
 /**
- * Allocates a 3-element vector on the stack.
+ * Creates a stack-backed 3-element vector.
+ *
+ * The returned tla_Vector points to a temporary array whose lifetime
+ * ends at the end of the enclosing block.
  */
 #define tla_vec3(x,y,z)   TLA_VECTOR((x), (y), (z))
+
 /**
- * Allocates a 4-element vector on the stack.
+ * Creates a stack-backed 4-element vector.
+ *
+ * The returned tla_Vector points to a temporary array whose lifetime
+ * ends at the end of the enclosing block.
  */
 #define tla_vec4(x,y,z,w) TLA_VECTOR((x), (y), (z), (w))
 

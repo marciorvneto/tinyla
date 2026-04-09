@@ -23,7 +23,7 @@
 
 //=============================
 //
-//   tla_Arena
+//   Arena
 //
 //=============================
 
@@ -41,7 +41,7 @@ void tla_arena_destroy(tla_Arena *a);
 
 //=============================
 //
-//   tla_Vectors and Matrices
+//   Vectors and Matrices
 //
 //=============================
 
@@ -67,6 +67,7 @@ tla_Vector *tla_vector_create(tla_Arena *a, size_t size);
 // ------------ Matrices ------------------
 
 tla_Matrix *tla_matrix_clone(tla_Arena *a, tla_Matrix *m);
+void       tla_matrix_copy_into(tla_Matrix *out, tla_Matrix *m);
 tla_Matrix *tla_matrix_of_value(tla_Arena *a, size_t rows, size_t cols,
                                 double value);
 tla_Matrix *tla_matrix_of_shape(tla_Arena *a, tla_Matrix *base, double value);
@@ -76,6 +77,7 @@ tla_Matrix *tla_matrix_eye(tla_Arena *a, size_t size);
 
 tla_Vector tla_vector_slice(tla_Vector *v, size_t start_index, size_t length);
 tla_Vector *tla_vector_clone(tla_Arena *a, tla_Vector *v);
+void       tla_vector_copy_into(tla_Vector *out, tla_Vector *v);
 tla_Vector *tla_vector_of_value(tla_Arena *a, size_t size, double value);
 tla_Vector *tla_vector_of_shape(tla_Arena *a, tla_Vector *base, double value);
 
@@ -121,6 +123,7 @@ tla_Vector *tla_vector_sub_new(tla_Arena *a, tla_Vector *v1, tla_Vector *v2);
 // ------
 
 double tla_vector_dot(tla_Vector *v1, tla_Vector *v2);
+
 
 // ------
 
@@ -412,6 +415,16 @@ tla_Matrix *tla_matrix_clone(tla_Arena *a, tla_Matrix *m) {
   return new;
 }
 
+void tla_matrix_copy_into(tla_Matrix *out, tla_Matrix *m){
+	assert(m->cols == out->cols);
+	assert(m->rows == out->rows);
+  for (size_t i = 0; i < m->rows; i++) {
+    for (size_t j = 0; j < m->cols; j++) {
+      tla_matrix_set_value(out, i, j, tla_matrix_get_value(m, i, j));
+    }
+  }
+}
+
 tla_Matrix *tla_matrix_of_value(tla_Arena *a, size_t rows, size_t cols,
                                 double value) {
   tla_Matrix *m = tla_matrix_create(a, rows, cols);
@@ -460,6 +473,13 @@ tla_Vector *tla_vector_clone(tla_Arena *a, tla_Vector *v) {
     tla_vector_set_value(v, i, tla_vector_get_value(v, i));
   }
   return new;
+}
+
+void tla_vector_copy_into(tla_Vector *out, tla_Vector *v){
+	assert(v->size == out->size);
+  for (size_t i = 0; i < v->size; i++) {
+    tla_vector_set_value(out, i, tla_vector_get_value(v, i));
+  }
 }
 
 tla_Vector *tla_vector_of_value(tla_Arena *a, size_t size, double value) {

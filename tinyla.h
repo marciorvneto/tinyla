@@ -75,7 +75,7 @@ tla_Matrix *tla_matrix_eye(tla_Arena *a, size_t size);
 
 // ------------ Vectors ------------------
 
-tla_Vector tla_vector_slice(tla_Vector *v, size_t start_index, size_t length);
+tla_Vector tla_vector_slice(tla_Vector *v, size_t start_index, size_t end_index);
 tla_Vector *tla_vector_clone(tla_Arena *a, tla_Vector *v);
 void       tla_vector_copy_into(tla_Vector *out, tla_Vector *v);
 tla_Vector *tla_vector_of_value(tla_Arena *a, size_t size, double value);
@@ -457,14 +457,15 @@ tla_Matrix *tla_matrix_eye(tla_Arena *a, size_t size) {
 
 // ------------ tla_Vectors ------------------
 
-tla_Vector tla_vector_slice(tla_Vector *v, size_t start_index, size_t length) {
-  int n = (int)length - (int)start_index;
-  assert(n >= 0);
-  assert(n <= v->size);
-  tla_Vector slice;
-  slice.size = n;
-  slice.values = v->values + start_index;
-  return slice;
+tla_Vector tla_vector_slice(tla_Vector *v, size_t start_index, size_t end_index) {
+    assert(v != NULL);
+    assert(start_index <= end_index && "Start index cannot be after end index");
+    assert(end_index <= v->size && "End index is out of bounds");
+    
+    tla_Vector slice;
+    slice.size = end_index - start_index;
+    slice.values = v->values + start_index;
+    return slice;
 }
 
 tla_Vector *tla_vector_clone(tla_Arena *a, tla_Vector *v) {

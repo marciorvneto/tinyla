@@ -3,8 +3,8 @@ message: "If you use TinyLA in academic or applied work, please cite it as below
 title: "TinyLA"
 type: software
 authors:
-  - family-names: Neto
-    given-names: "Márcio R. V."
+  - family-names: Vianna Neto
+    given-names: "Márcio R."
     orcid: "https://orcid.org/0000-0003-4574-9173"
 abstract: >-
   A lightweight, single-file, header-only linear algebra library in C with

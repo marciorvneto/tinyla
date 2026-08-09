@@ -171,7 +171,7 @@ repository**.
 
 ```bibtex
 @software{neto_tinyla,
-  author  = {Neto, Márcio R. V.},
+  author  = {Vianna Neto, Márcio R.},
   title   = {TinyLA},
   year    = {2026},
   url     = {https://github.com/marciorvneto/tinyla},

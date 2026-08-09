@@ -72,6 +72,9 @@ tla_Matrix *tla_matrix_of_value(tla_Arena *a, size_t rows, size_t cols,
                                 double value);
 tla_Matrix *tla_matrix_of_shape(tla_Arena *a, tla_Matrix *base, double value);
 tla_Matrix *tla_matrix_eye(tla_Arena *a, size_t size);
+/* Row-major list → newly allocated matrix (used by TLA_MATRIX). */
+tla_Matrix *tla_matrix_from_list(tla_Arena *a, size_t rows, size_t cols,
+                                 const double *data);
 
 // ------------ Vectors ------------------
 
@@ -80,6 +83,8 @@ tla_Vector *tla_vector_clone(tla_Arena *a, tla_Vector *v);
 void       tla_vector_copy_into(tla_Vector *out, tla_Vector *v);
 tla_Vector *tla_vector_of_value(tla_Arena *a, size_t size, double value);
 tla_Vector *tla_vector_of_shape(tla_Arena *a, tla_Vector *base, double value);
+/* List → newly allocated vector (used by TLA_VECTOR). */
+tla_Vector *tla_vector_from_list(tla_Arena *a, const double *data, size_t n);
 
 // ------------ Conversions ------------------
 
@@ -343,6 +348,89 @@ static inline double tla_vector_get_value(tla_Vector *v, size_t idx) {
   return v->values[idx];
 }
 
+//=============================
+//
+//   Convenience macros
+//
+//=============================
+
+/**
+ * Element access as assignable lvalues.
+ *
+ *   TLA_M(A, i, j) = 3.0;
+ *   double x0 = TLA_V(x, 0);
+ */
+#define TLA_M(m, r, c) ((m)->values[(size_t)(r) * (m)->cols + (size_t)(c)])
+#define TLA_V(v, i)    ((v)->values[(size_t)(i)])
+
+/** Optional short names for get/set helpers. */
+#define VGET tla_vector_get_value
+#define VSET tla_vector_set_value
+#define MGET tla_matrix_get_value
+#define MSET tla_matrix_set_value
+
+/**
+ * Build an arena-backed vector from a brace list of doubles.
+ *
+ *   tla_Vector *b = TLA_VECTOR(&arena, 1.0, 2.0, 3.0);
+ */
+#define TLA_VECTOR(arena, ...)                                                 \
+  tla_vector_from_list(                                                        \
+      (arena), (const double[]){__VA_ARGS__},                                  \
+      sizeof((const double[]){__VA_ARGS__}) / sizeof(double))
+
+/**
+ * Build an arena-backed matrix from a row-major brace list of doubles.
+ *
+ *   tla_Matrix *A = TLA_MATRIX(&arena, 2, 2, 2.0, 1.0, 1.0, 1.0);
+ */
+#define TLA_MATRIX(arena, rows, cols, ...)                                     \
+  tla_matrix_from_list((arena), (rows), (cols), (const double[]){__VA_ARGS__})
+
+/**
+ * Stack-backed vector literal (not arena-owned). The compound-literal storage
+ * lives until the end of the enclosing block. Fine for temporary RHS values
+ * and function arguments, not for long-lived results.
+ *
+ *   tla_Vector v = TLA_VECTOR_LIT(1.0, 2.0, 3.0);
+ *   tla_Vector u = tla_vec3(1.0, 0.0, 0.0);
+ */
+#define TLA_VECTOR_LIT(...)                                                    \
+  ((tla_Vector){.size = sizeof((double[]){__VA_ARGS__}) / sizeof(double),      \
+                .values = (double[]){__VA_ARGS__}})
+
+#define tla_vec2(x, y)       TLA_VECTOR_LIT((x), (y))
+#define tla_vec3(x, y, z)    TLA_VECTOR_LIT((x), (y), (z))
+#define tla_vec4(x, y, z, w) TLA_VECTOR_LIT((x), (y), (z), (w))
+
+/**
+ * Scratch scope: all arena allocations inside the block are freed on exit.
+ * Earlier allocations (outside the block) are left intact.
+ *
+ *   TLA_SCRATCH(&arena) {
+ *     tla_Matrix *tmp = tla_matrix_of_value(&arena, n, n, 0.0);
+ *     // ...
+ *   }
+ */
+#define TLA_SCRATCH(arena)                                                     \
+  for (size_t _tla_scratch = tla_arena_save(arena), _tla_once = 1;             \
+       _tla_once;                                                              \
+       tla_arena_restore((arena), _tla_scratch), _tla_once = 0)
+
+/**
+ * Factor A with PLU and solve A x = b. Assigns the solution pointer to x_out.
+ * x_out must be an lvalue of type tla_Vector *.
+ *
+ *   tla_Vector *x;
+ *   TLA_SOLVE(&arena, A, b, x);
+ */
+#define TLA_SOLVE(arena, A, b, x_out)                                          \
+  do {                                                                         \
+    tla_PLUFactorization _tla_plu = tla_plu_factor((arena), (A));              \
+    (x_out) = tla_vector_of_shape((arena), (b), 0.0);                          \
+    tla_lu_solve((arena), (x_out), _tla_plu, (b));                             \
+  } while (0)
+
 #ifdef TINY_LA_IMPLEMENTATION
 
 //=============================
@@ -449,8 +537,19 @@ tla_Matrix *tla_matrix_of_shape(tla_Arena *a, tla_Matrix *base, double value) {
 tla_Matrix *tla_matrix_eye(tla_Arena *a, size_t size) {
   tla_Matrix *m = tla_matrix_create(a, size, size);
   for (size_t i = 0; i < m->rows; i++) {
-    size_t j = i;
-    m->values[m->cols * i + j] = 1.0;
+    for (size_t j = 0; j < m->cols; j++) {
+      m->values[m->cols * i + j] = (i == j) ? 1.0 : 0.0;
+    }
+  }
+  return m;
+}
+
+tla_Matrix *tla_matrix_from_list(tla_Arena *a, size_t rows, size_t cols,
+                                 const double *data) {
+  tla_Matrix *m = tla_matrix_create(a, rows, cols);
+  size_t n = rows * cols;
+  for (size_t i = 0; i < n; i++) {
+    m->values[i] = data[i];
   }
   return m;
 }
@@ -471,7 +570,7 @@ tla_Vector tla_vector_slice(tla_Vector *v, size_t start_index, size_t end_index)
 tla_Vector *tla_vector_clone(tla_Arena *a, tla_Vector *v) {
   tla_Vector *new = tla_vector_create(a, v->size);
   for (size_t i = 0; i < v->size; i++) {
-    tla_vector_set_value(v, i, tla_vector_get_value(v, i));
+    tla_vector_set_value(new, i, tla_vector_get_value(v, i));
   }
   return new;
 }
@@ -481,6 +580,14 @@ void tla_vector_copy_into(tla_Vector *out, tla_Vector *v){
   for (size_t i = 0; i < v->size; i++) {
     tla_vector_set_value(out, i, tla_vector_get_value(v, i));
   }
+}
+
+tla_Vector *tla_vector_from_list(tla_Arena *a, const double *data, size_t n) {
+  tla_Vector *v = tla_vector_create(a, n);
+  for (size_t i = 0; i < n; i++) {
+    v->values[i] = data[i];
+  }
+  return v;
 }
 
 tla_Vector *tla_vector_of_value(tla_Arena *a, size_t size, double value) {
@@ -498,36 +605,6 @@ tla_Vector *tla_vector_of_shape(tla_Arena *a, tla_Vector *base, double value) {
   }
   return v;
 }
-
-#define TLA_VECTOR(...) \
-  ((tla_Vector){ \
-    .size   = sizeof((double[]){__VA_ARGS__}) / sizeof(double), \
-    .values = (double[]){__VA_ARGS__} \
-  })
-
-/**
- * Creates a stack-backed 2-element vector.
- *
- * The returned tla_Vector points to a temporary array whose lifetime
- * ends at the end of the enclosing block.
- */
-#define tla_vec2(x,y)     TLA_VECTOR((x), (y))
-
-/**
- * Creates a stack-backed 3-element vector.
- *
- * The returned tla_Vector points to a temporary array whose lifetime
- * ends at the end of the enclosing block.
- */
-#define tla_vec3(x,y,z)   TLA_VECTOR((x), (y), (z))
-
-/**
- * Creates a stack-backed 4-element vector.
- *
- * The returned tla_Vector points to a temporary array whose lifetime
- * ends at the end of the enclosing block.
- */
-#define tla_vec4(x,y,z,w) TLA_VECTOR((x), (y), (z), (w))
 
 // ------------ Conversions ------------------
 

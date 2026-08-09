@@ -170,7 +170,7 @@ repository**.
 **BibTeX:**
 
 ```bibtex
-@software{neto_tinyla,
+@software{vianna_neto_tinyla,
   author  = {Vianna Neto, Márcio R.},
   title   = {TinyLA},
   year    = {2026},
